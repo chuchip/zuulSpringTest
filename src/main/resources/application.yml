@@ -1,0 +1,15 @@
+zuul:
+  sensitiveHeaders: 
+  routes:
+    google:
+      path: /google/**
+      url: https://www.google.com/
+    privado:
+      path: /privado/**
+      url: http://www.profesor-p.com  
+    local:
+      path: /local/**
+      url: http://localhost:8080/api      
+    url:
+      path: /url/**
+      url: http://url.com
