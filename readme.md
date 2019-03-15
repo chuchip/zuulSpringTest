@@ -356,7 +356,7 @@ public class URIRequest {
 
 Aquí se puede ver una captura de pantalla de postman realizando la llamada a través del body:
 
-![postman2](https://raw.githubusercontent.com/chuchip/zuulSpringTest/master/postman2.png)
+![postman2](https://raw.githubusercontent.com/chuchip/zuulSpringTest/master/postman2.PNG)
 
 Realmente en este filtro lo que se hace es crear una nueva petición HTTP, usando la librería  `com.sun.jersey.api.client` , capturar la salida de esa petición y devolverla a **Zuul**. Pero no voy a entrar a explicar en profundidad su funcionamiento. Siempre se puede estudiar el código, ¿ verdad ? ;-)
 
