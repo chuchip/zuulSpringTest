@@ -35,10 +35,7 @@ import com.sun.jersey.api.client.config.DefaultClientConfig;
 
 public class RouteURLFilter extends ZuulFilter {		
 	
-	public RouteURLFilter()
-	{
-		
-	}
+	
 	@Override
 	public String filterType() {
 		return FilterConstants.ROUTE_TYPE;

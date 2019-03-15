@@ -18,20 +18,20 @@ public class TestController {
 	public String test(HttpServletRequest request)
 	{
 		StringBuffer strLog=new StringBuffer();
-		strLog.append("................ RECIBIDA PETICION EN /api ......  \n");
-		strLog.append("Metodo: "+request.getMethod()+"\n");
-		strLog.append("URL: "+request.getRequestURL()+"\n");
-		strLog.append("Host Remoto: "+request.getRemoteHost()+"\n");
-		strLog.append("----- MAP ----\n");
+		strLog.append("................ RECIBIDA PETICION EN /api ......  </BR></br>");
+		strLog.append("Metodo: "+request.getMethod()+"</BR>");
+		strLog.append("URL: "+request.getRequestURL()+"</BR>");
+		strLog.append("Host Remoto: "+request.getRemoteHost()+"</BR>");
+		strLog.append("----- MAP ----</BR>");
 		request.getParameterMap().forEach( (key,value) ->
 		{
 			for (int n=0;n<value.length;n++)
 			{
-				strLog.append("Clave:"+key+ " Valor: "+value[n]+"\n");
+				strLog.append("Clave:"+key+ " Valor: "+value[n]+"</BR>");
 			}
 		} );
 		
-		strLog.append("----- Headers ----\n");
+		strLog.append("</BR>----- Headers ----</BR>");
 		Enumeration<String> nameHeaders=request.getHeaderNames();				
 		while (nameHeaders.hasMoreElements())
 		{
@@ -40,16 +40,20 @@ public class TestController {
 			while (valueHeaders.hasMoreElements())
 			{
 				String value=valueHeaders.nextElement();
-				strLog.append("Clave:"+name+ " Valor: "+value+"\n");
+				strLog.append("Clave:"+name+ " Valor: "+value+"</BR>");
 			}
 		}
 		try {
-			strLog.append("----- BODY ----\n");
+			strLog.append("</br>----- BODY ----</BR>");
 			strLog.append( request.getReader().lines().collect(Collectors.joining(System.lineSeparator())));
 		} catch (IOException e) {
 			
 		}
 		log.info(strLog.toString());
-		return "Devuelto por /api"; 
+		return "<html>"
+				+" <title>Prueba de ZUUL</TITLE> <HEAD>"+
+				strLog.toString()+
+				"</HEAD>"
+				+ "</html>"; 
 	}
 }

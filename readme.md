@@ -14,11 +14,29 @@ Como siempre [en mi página de GitHub](https://github.com/chuchip/zuulSpringTest
 
 Si tenemos instalado *Eclipse* con el [plugin de *Spring Boot*](https://marketplace.eclipse.org/content/spring-tools-4-spring-boot-aka-spring-tool-suite-4) (lo cual recomiendo), el crear el proyecto seria tan fácil como añadir un  nuevo proyecto del tipo *Spring Boot* incluyendo el *starter* **Zuul**. Para poder hacer algunas pruebas también incluiremos el *starter*  **Web**, como se ve en la imagen:
 
-![Eclipse Plugin Spring Boot](.\starters.png)
+![Eclipse Plugin Spring Boot](https://raw.githubusercontent.com/chuchip/zuulSpringTest/master/springio.png)
 
 Como siempre tenemos la opción de crear un proyecto Maven desde la página web https://start.spring.io/ que luego importaremos desde nuestro IDE preferido.
 
-![Crear proyecto Maven desde start.spring.io](.\springio.png)
+![Crear proyecto Maven desde start.spring.io](https://raw.githubusercontent.com/chuchip/zuulSpringTest/master/springio.png)
+
+Además de estos starters  en nuestro proyecto deberemos incluir las siguientes dependencias en Maven
+
+```
+<!-- https://mvnrepository.com/artifact/com.sun.jersey/jersey-client -->
+		<dependency>
+		    <groupId>com.sun.jersey</groupId>
+		    <artifactId>jersey-client</artifactId>
+		</dependency>
+
+		<!-- https://mvnrepository.com/artifact/com.fasterxml.jackson.core/jackson-databind -->
+		<dependency>
+		    <groupId>com.fasterxml.jackson.core</groupId>
+		    <artifactId>jackson-databind</artifactId>		  
+		</dependency>
+```
+
+Estas dependencias son necesarias por este proyecto por las especificaciones que tiene, pero **Zuul** como tal no las necesita en absoluto.
 
 ### Empezando
 
@@ -26,7 +44,7 @@ Partiendo que nuestro programa esta escuchando en http://localhost:8080/ , vamos
 
 Para ello deberemos crear el fichero `application.yml` dentro del directorio *resources*, como se ve en la imagen
 
-![Estructura del proyecto](.\estructura_ficheros.png)
+![Estructura del proyecto](https://raw.githubusercontent.com/chuchip/zuulSpringTest/master/estructura_ficheros.png)
 
 En este fichero incluiremos las siguientes líneas:
 
@@ -147,8 +165,6 @@ Para que **Zuul**  use esta clase deberemos crear otro *bean* con una función c
 
 Recordar que también hay un filtro para tratar los errores y otro para tratar justo después  del redirección ("route"), del que hablare más tarde en este articulo.
 
-
-
 Aclarar que aunque no lo trato en este articulo con **Zuul** no solo podemos redirigir hacia URL estáticas sino también a servicios, suministrados por Eureka Server, del cual hable en un articulo articulo. Además se integra con Hystrix para tener tolerancia a fallos, de tal manera que si no puede alcanzar un servidor se puede especificar que acción tomar.
 
 ### Filtrando. Implementando seguridad
@@ -227,7 +243,7 @@ En la primera cuando vayamos a la URL `http://localhost:8080/local/LO_QUE_SEA` s
 
 En la segunda cuando vayamos a la URL `http://localhost:8080/url/LO_QUE_SEA` seremos redirigidos a  `http://localhost:8080/api/LO_QUE_SEA`
 
-En http://localhost:8080/api estará escuchando un servicio REST que esta implementada en la clase **TestController** . Esta clase simplemente deja un registro de los datos de la  petición recibida y devuelve la cadena 
+En http://localhost:8080/api estará escuchando un servicio REST que esta implementada en la clase **TestController** . Esta clase simplemente deja un registro de los datos de la  petición recibida y devuelve en el body los parámetros recibidos
 
 ```java
 @RestController
@@ -237,20 +253,20 @@ public class TestController {
 	public String test(HttpServletRequest request)
 	{
 		StringBuffer strLog=new StringBuffer();
-		strLog.append("................ RECIBIDA PETICION EN /api ......  \n");
-		strLog.append("Metodo: "+request.getMethod()+"\n");
-		strLog.append("URL: "+request.getRequestURL()+"\n");
-		strLog.append("Host Remoto: "+request.getRemoteHost()+"\n");
-		strLog.append("----- MAP ----\n");
+		strLog.append("................ RECIBIDA PETICION EN /api ......  </BR></br>");
+		strLog.append("Metodo: "+request.getMethod()+"</BR>");
+		strLog.append("URL: "+request.getRequestURL()+"</BR>");
+		strLog.append("Host Remoto: "+request.getRemoteHost()+"</BR>");
+		strLog.append("----- MAP ----</BR>");
 		request.getParameterMap().forEach( (key,value) ->
 		{
 			for (int n=0;n<value.length;n++)
 			{
-				strLog.append("Clave:"+key+ " Valor: "+value[n]+"\n");
+				strLog.append("Clave:"+key+ " Valor: "+value[n]+"</BR>");
 			}
 		} );
 		
-		strLog.append("----- Headers ----\n");
+		strLog.append("</BR>----- Headers ----</BR>");
 		Enumeration<String> nameHeaders=request.getHeaderNames();				
 		while (nameHeaders.hasMoreElements())
 		{
@@ -259,17 +275,91 @@ public class TestController {
 			while (valueHeaders.hasMoreElements())
 			{
 				String value=valueHeaders.nextElement();
-				strLog.append("Clave:"+name+ " Valor: "+value+"\n");
+				strLog.append("Clave:"+name+ " Valor: "+value+"</BR>");
 			}
 		}
 		try {
-			strLog.append("----- BODY ----\n");
+			strLog.append("</br>----- BODY ----</BR>");
 			strLog.append( request.getReader().lines().collect(Collectors.joining(System.lineSeparator())));
 		} catch (IOException e) {
 			
 		}
 		log.info(strLog.toString());
-    	return "Devuelto por /api";     
+		return "<html>"
+				+" <title>Prueba de ZUUL</TITLE> <HEAD>"+
+				strLog.toString()+
+				"</HEAD>"
+				+ "</html>"; 
+	}
+}
+```
+
+La clase **RouteURLFilter** sera la encargada de tratar **solo** las peticiones a **/url** para ello en la función **shouldFilter** tendremos este código:
+
+```
+@Override
+	public boolean shouldFilter() {
+		RequestContext ctx = RequestContext.getCurrentContext();
+		if ( ctx.getRequest().getRequestURI() == null || ! ctx.getRequest().getRequestURI().startsWith("/url"))
+			return false;
+		return ctx.getRouteHost() != null
+				&& ctx.sendZuulResponse();
 	}
 ```
 
+Este filtro sera declarado del tipo **router** en la función **filterType** por lo cual se ejecutara después de los filtros *pre* y antes de ejecutar la redirección y llamar al servidor final.
+
+```
+	@Override
+	public String filterType() {
+		return FilterConstants.ROUTE_TYPE;
+	}
+```
+
+En la función **run** esta el código que ejecuta realmente la petición a la URL solicitada
+
+Si encuentra en el header la variable `hostDestino` será donde mandara la petición recibida. También buscara en la cabecera de la petición  la variables `pathDestino` y `pathSegmentosDestino`. La primera será para añadida al `hostDestino` y la segunda serán los parámetros añadidos.  
+
+Por ejemplo, supongamos una petición como esta:
+
+``` 
+> curl --header "hostDestino: http://localhost:8080" --header "pathDestino: api"   --header "pathSegmentosDestino: q=profesor-p" localhost:8080/url
+```
+
+La llamada será redirigida a http://localhost:8080/api?q=profesor-p como se puede ver en la siguiente captura de **postman**
+
+
+
+![postman1](https://raw.githubusercontent.com/chuchip/zuulSpringTest/master/postman1.png)
+
+También puede recibir la URL a redireccionar en un objeto JSON en el cuerpo de la peticion HTML. El objeto JSON debe tener el formato definido por las clases **GatewayRequest** que a su vez contendrá un objeto **URIRequest**
+
+```
+public class GatewayRequest {
+	URIRequest uri;
+	String body;
+
+}
+```
+
+
+
+```
+public class URIRequest {
+	String url;
+	String path;
+	HashMap<String,String> pathSegmentos=new HashMap<>();
+	byte[] body=null;
+```
+
+
+
+Aquí se puede ver una captura de pantalla de postman realizando la llamada a través del body:
+
+![postman2](https://raw.githubusercontent.com/chuchip/zuulSpringTest/master/postman2.png)
+
+Realmente en este filtro lo que se hace es crear una nueva petición HTTP, usando la librería  `com.sun.jersey.api.client` , capturar la salida de esa petición y devolverla a **Zuul**. Pero no voy a entrar a explicar en profundidad su funcionamiento. Siempre se puede estudiar el código, ¿ verdad ? ;-)
+
+Como se ve, **Zuul** tiene mucha potencia y es una excelente herramienta para realizar redirecciones. En este articulo solo he arañado las principales características de esta fantástica herramienta, pero espero que haya servido para ver las posibilidades que ofrece.
+
+¡¡Nos vemos en la próxima entrada!!
