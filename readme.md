@@ -1,3 +1,7 @@
+El articulo actualizado y mejorado en http://www.profesor-p.com/2019/03/16/zuul-para-redirigir-peticiones-rest-en-spring-boot/
+
+
+
 En este articulo explicare como crear una pasarela para peticiones REST (una *gateway*)  utilizando Zuul.
 
 **[Zuul](https://cloud.spring.io/spring-cloud-netflix/multi/multi__router_and_filter_zuul.html)** es parte del  paquete [Spring Cloud NetFlix](https://spring.io/projects/spring-cloud-netflix) y permite redirigir peticiones REST, realizando diversos tipos de filtros. 
