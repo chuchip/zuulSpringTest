@@ -1,5 +1,6 @@
 package com.profesorp.zuulSpringTest.controller;
 
+import java.io.BufferedReader;
 import java.io.IOException;
 import java.util.Enumeration;
 import java.util.stream.Collectors;
@@ -13,25 +14,28 @@ import org.springframework.web.bind.annotation.RestController;
 
 @RestController
 public class TestController {
+	final  static String SALTOLINEA="\n";
+	
 	Logger log = LoggerFactory.getLogger(TestController.class); 
 	@RequestMapping(path="/api")
 	public String test(HttpServletRequest request)
 	{
 		StringBuffer strLog=new StringBuffer();
-		strLog.append("................ RECIBIDA PETICION EN /api ......  </BR></br>");
-		strLog.append("Metodo: "+request.getMethod()+"</BR>");
-		strLog.append("URL: "+request.getRequestURL()+"</BR>");
-		strLog.append("Host Remoto: "+request.getRemoteHost()+"</BR>");
-		strLog.append("----- MAP ----</BR>");
+		
+		strLog.append("................ RECIBIDA PETICION EN /api ......  "+SALTOLINEA);
+		strLog.append("Metodo: "+request.getMethod()+SALTOLINEA);
+		strLog.append("URL: "+request.getRequestURL()+SALTOLINEA);
+		strLog.append("Host Remoto: "+request.getRemoteHost()+SALTOLINEA);
+		strLog.append("----- MAP ----"+SALTOLINEA);
 		request.getParameterMap().forEach( (key,value) ->
 		{
 			for (int n=0;n<value.length;n++)
 			{
-				strLog.append("Clave:"+key+ " Valor: "+value[n]+"</BR>");
+				strLog.append("Clave:"+key+ " Valor: "+value[n]+SALTOLINEA);
 			}
 		} );
 		
-		strLog.append("</BR>----- Headers ----</BR>");
+		strLog.append(SALTOLINEA+"----- Headers ----"+SALTOLINEA);
 		Enumeration<String> nameHeaders=request.getHeaderNames();				
 		while (nameHeaders.hasMoreElements())
 		{
@@ -40,20 +44,30 @@ public class TestController {
 			while (valueHeaders.hasMoreElements())
 			{
 				String value=valueHeaders.nextElement();
-				strLog.append("Clave:"+name+ " Valor: "+value+"</BR>");
+				strLog.append("Clave:"+name+ " Valor: "+value+SALTOLINEA);
 			}
 		}
 		try {
-			strLog.append("</br>----- BODY ----</BR>");
-			strLog.append( request.getReader().lines().collect(Collectors.joining(System.lineSeparator())));
-		} catch (IOException e) {
-			
+			strLog.append(SALTOLINEA+"----- BODY ----"+SALTOLINEA);
+			BufferedReader reader= request.getReader();
+			if (reader!=null)
+			{
+				char[] linea= new char[100];
+				int nCaracteres;
+				while  ((nCaracteres=reader.read(linea,0,100))>0)
+				{				
+					strLog.append( linea);
+					
+					if (nCaracteres!=100)
+						break;
+				} 
+			}
+		} catch (Throwable e) {
+			e.printStackTrace();
 		}
 		log.info(strLog.toString());
-		return "<html>"
-				+" <title>Prueba de ZUUL</TITLE> <HEAD>"+
-				strLog.toString()+
-				"</HEAD>"
-				+ "</html>"; 
+		
+		return SALTOLINEA+"---------- Prueba de ZUUL ------------"+SALTOLINEA+
+				strLog.toString();
 	}
 }

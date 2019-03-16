@@ -3,16 +3,9 @@ package com.profesorp.zuulSpringTest.Filters;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
-import java.net.URLEncoder;
+import java.net.URL;
 import java.nio.charset.Charset;
 import java.text.ParseException;
-import java.util.ArrayList;
-import java.util.Enumeration;
-import java.util.HashMap;
-import java.util.List;
-
-import javax.servlet.http.HttpServletRequest;
-import javax.ws.rs.core.MediaType;
 
 import org.springframework.cloud.netflix.zuul.filters.support.FilterConstants;
 import org.springframework.http.HttpStatus;
@@ -21,29 +14,31 @@ import org.springframework.web.util.UriComponentsBuilder;
 
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.netflix.util.Pair;
 import com.netflix.zuul.ZuulFilter;
 import com.netflix.zuul.context.RequestContext;
 import com.profesorp.zuulSpringTest.Requests.GatewayRequest;
 import com.profesorp.zuulSpringTest.Requests.URIRequest;
-import com.sun.jersey.api.client.Client;
-import com.sun.jersey.api.client.ClientResponse;
-import com.sun.jersey.api.client.WebResource;
-import com.sun.jersey.api.client.WebResource.Builder;
-import com.sun.jersey.api.client.config.DefaultClientConfig;
 
+/**
+ {
+    "body": "El body chuli", "uri": { 	"url":"http://localhost:8080", 	"path": "api"    }
+}
+ * @author chuchip
+ *
+ */
 
 public class RouteURLFilter extends ZuulFilter {		
 	
 	
 	@Override
 	public String filterType() {
-		return FilterConstants.ROUTE_TYPE;
+		return FilterConstants.PRE_TYPE;
 	}
 
 	@Override
 	public int filterOrder() {
-		return FilterConstants.SIMPLE_HOST_ROUTING_FILTER_ORDER - 1;
+		return FilterConstants.PRE_DECORATION_FILTER_ORDER+1;
+				
 	}
 
 	@Override
@@ -60,15 +55,12 @@ public class RouteURLFilter extends ZuulFilter {
     	try {
     			
     		RequestContext ctx = RequestContext.getCurrentContext();
-			HttpServletRequest request = ctx.getRequest();
+
 		
-		 URIRequest uriBankia;
-		 InputStream inputStream = request.getInputStream();
-		 byte[] body= StreamUtils.copyToByteArray(inputStream);
+		 URIRequest uriRequest;
+		
 		 try  {
-			 uriBankia= getURIRedirection(ctx);
-			 if (uriBankia.getBody()!=null)
-				 body=uriBankia.getBody();
+			 uriRequest= getURIRedirection(ctx);		
 		 } catch (ParseException k)
 		 {			 	 
 			 ctx.setResponseBody(k.getMessage());
@@ -77,97 +69,20 @@ public class RouteURLFilter extends ZuulFilter {
 			 return null;
 		 }	    		 
 		
-		 UriComponentsBuilder uriComponent=UriComponentsBuilder.fromHttpUrl(uriBankia.getUrl() );
-	     if (uriBankia.getPath()==null)
-	        	uriBankia.setPath("/");
-	     uriComponent.path(uriBankia.getPath());
-	     uriBankia.getPathSegmentos().forEach( ( campo,valor) -> {
-	    	  try {
-				uriComponent.queryParam(campo, URLEncoder.encode(valor,"UTF-8"));
-			} catch (Exception e) {
-				// TODO Auto-generated catch block
-				e.printStackTrace();
-			}	    	
-	     	}
-	     );
-	     
-	     
+		 UriComponentsBuilder uriComponent=UriComponentsBuilder.fromHttpUrl(uriRequest.getUrl() );
+	     if (uriRequest.getPath()==null)
+	    	 uriRequest.setPath("/");
+	     uriComponent.path(uriRequest.getPath());
+	     	     
 	     String uri=uriComponent.build().toUriString();
-	     WebResource webResource = Client.create(new DefaultClientConfig()).resource(uri);
-	      		 					
-		Builder builder = webResource.accept(MediaType.APPLICATION_JSON);
-		Enumeration<String> enumerat =  request.getHeaderNames();
-		boolean typeJSON=false;
-		while (enumerat.hasMoreElements())
-		{
-			String name=enumerat.nextElement();
-			Enumeration<String> valores=request.getHeaders(name);
-			while (valores.hasMoreElements())
-			{
-				String value=valores.nextElement();
-				if (name.equals("hostdestino")
-						|| name.equals("pathdestino")
-						|| name.equals("pathsegmentosdestino"))
-					continue;
-				if (name.equals("content-type") && value.equals("application/json"))
-					typeJSON=true;
-				webResource.header(name, value);
-			}
-		}
-		
-		
-		ClientResponse response=null;
-		String metodo=request.getMethod().toUpperCase();
-		switch (metodo)
-		{
-			case "POST":
-				if (typeJSON)
-					response = builder.type(MediaType.APPLICATION_JSON).post(ClientResponse.class,body );
-				else
-					response = builder.post(ClientResponse.class,body );
-				break;
-			case "GET":
-				if (typeJSON)
-					response = builder.type(MediaType.APPLICATION_JSON).get(ClientResponse.class);
-				else
-					response = builder.get(ClientResponse.class);
-				break;
-			case "PUT":
-				if (typeJSON)
-					response = builder.type(MediaType.APPLICATION_JSON).put(ClientResponse.class,body);
-				else
-					response = builder.put(ClientResponse.class,body);
-				break;
-			case "DELETE":
-				if (typeJSON)
-					response = builder.type(MediaType.APPLICATION_JSON).delete(ClientResponse.class,body);
-				else
-					response = builder.delete(ClientResponse.class,body);
-				break;
-			default:
-				 ctx.setResponseBody("Tipo de peticion HTTP no valida "+metodo);
-				 ctx.setResponseStatusCode(HttpStatus.BAD_REQUEST.value());
-				 ctx.setSendZuulResponse(false);
-				 return null;
-		}
-		 
-		List<Pair<String, String>> filteredResponseHeaders = new ArrayList<>();
-		response.getHeaders().forEach( (valor,lista) -> 
-		{
-			lista.forEach( key -> filteredResponseHeaders.add(new Pair<String,String>(valor,key)));
-		});
-		
-		
-		ctx.put("zuulResponseHeaders", filteredResponseHeaders);		
-    	ctx.setSendZuulResponse(false);
-    	ctx.setResponseBody(response.getEntity(String.class));
-		ctx.setRouteHost(null); // prevent SimpleHostRoutingFilter from running
+	     ctx.setRouteHost(new URL(uri));	   	  
     	} catch (IOException k)
     	{
     		k.printStackTrace();
     	}
 		return null;
     }
+    
     URIRequest getURIRedirection(RequestContext ctx) throws ParseException
 	{
     	URIRequest uriRequest;
@@ -181,31 +96,11 @@ public class RouteURLFilter extends ZuulFilter {
 	     }
 		
 		 String pathDestino=ctx.getRequest().getHeader("pathDestino");
-		 Enumeration<String> pathSegmentosDestino=ctx.getRequest().getHeaders("pathSegmentosDestino");
-	  
-	     UriComponentsBuilder uri=UriComponentsBuilder.fromHttpUrl(hostDestino);
-	     if (pathDestino!=null)
-	     {
-	    	 uri=uri.path(pathDestino);
-	     }
-	     
-	     HashMap<String,String> hmParams=new HashMap<>() ;
-	     if (pathSegmentosDestino!=null)
-	     {	    	    	
-	    	 while (pathSegmentosDestino.hasMoreElements())
-	    	 {
-	    		 String valor=pathSegmentosDestino.nextElement();
-	    		 String[] campos=valor.split("=");
-	    		 if (campos.length==2)
-	    		 {
-	    			 hmParams.put(campos[0],campos[1]);	    	    			 
-	    		 }
-	    	 }	    	    	
-	     }
+		
 	     uriRequest=new URIRequest();
 	     uriRequest.setUrl(hostDestino);
 	     uriRequest.setPath(pathDestino);
-	     uriRequest.setPathSegmentos(hmParams);
+	    
 		 return uriRequest;
 	}
 	

@@ -243,30 +243,33 @@ En la primera cuando vayamos a la URL `http://localhost:8080/local/LO_QUE_SEA` s
 
 En la segunda cuando vayamos a la URL `http://localhost:8080/url/LO_QUE_SEA` seremos redirigidos a  `http://localhost:8080/api/LO_QUE_SEA`
 
-En http://localhost:8080/api estará escuchando un servicio REST que esta implementada en la clase **TestController** . Esta clase simplemente deja un registro de los datos de la  petición recibida y devuelve en el body los parámetros recibidos
+En http://localhost:8080/api estará escuchando un servicio REST que esta implementada en la clase **TestController** . Esta clase simplemente deja un registro de los datos de la  petición recibida y devuelve en el *body* los parámetros recibidos
 
 ```java
 @RestController
 public class TestController {
+	final  static String SALTOLINEA="\n";
+	
 	Logger log = LoggerFactory.getLogger(TestController.class); 
 	@RequestMapping(path="/api")
 	public String test(HttpServletRequest request)
 	{
 		StringBuffer strLog=new StringBuffer();
-		strLog.append("................ RECIBIDA PETICION EN /api ......  </BR></br>");
-		strLog.append("Metodo: "+request.getMethod()+"</BR>");
-		strLog.append("URL: "+request.getRequestURL()+"</BR>");
-		strLog.append("Host Remoto: "+request.getRemoteHost()+"</BR>");
-		strLog.append("----- MAP ----</BR>");
+		
+		strLog.append("................ RECIBIDA PETICION EN /api ......  "+SALTOLINEA);
+		strLog.append("Metodo: "+request.getMethod()+SALTOLINEA);
+		strLog.append("URL: "+request.getRequestURL()+SALTOLINEA);
+		strLog.append("Host Remoto: "+request.getRemoteHost()+SALTOLINEA);
+		strLog.append("----- MAP ----"+SALTOLINEA);
 		request.getParameterMap().forEach( (key,value) ->
 		{
 			for (int n=0;n<value.length;n++)
 			{
-				strLog.append("Clave:"+key+ " Valor: "+value[n]+"</BR>");
+				strLog.append("Clave:"+key+ " Valor: "+value[n]+SALTOLINEA);
 			}
 		} );
 		
-		strLog.append("</BR>----- Headers ----</BR>");
+		strLog.append(SALTOLINEA+"----- Headers ----"+SALTOLINEA);
 		Enumeration<String> nameHeaders=request.getHeaderNames();				
 		while (nameHeaders.hasMoreElements())
 		{
@@ -275,23 +278,34 @@ public class TestController {
 			while (valueHeaders.hasMoreElements())
 			{
 				String value=valueHeaders.nextElement();
-				strLog.append("Clave:"+name+ " Valor: "+value+"</BR>");
+				strLog.append("Clave:"+name+ " Valor: "+value+SALTOLINEA);
 			}
 		}
 		try {
-			strLog.append("</br>----- BODY ----</BR>");
-			strLog.append( request.getReader().lines().collect(Collectors.joining(System.lineSeparator())));
-		} catch (IOException e) {
-			
+			strLog.append(SALTOLINEA+"----- BODY ----"+SALTOLINEA);
+			BufferedReader reader= request.getReader();
+			if (reader!=null)
+			{
+				char[] linea= new char[100];
+				int nCaracteres;
+				while  ((nCaracteres=reader.read(linea,0,100))>0)
+				{				
+					strLog.append( linea);
+					
+					if (nCaracteres!=100)
+						break;
+				} 
+			}
+		} catch (Throwable e) {
+			e.printStackTrace();
 		}
 		log.info(strLog.toString());
-		return "<html>"
-				+" <title>Prueba de ZUUL</TITLE> <HEAD>"+
-				strLog.toString()+
-				"</HEAD>"
-				+ "</html>"; 
+		
+		return SALTOLINEA+"---------- Prueba de ZUUL ------------"+SALTOLINEA+
+				strLog.toString();
 	}
 }
+
 ```
 
 La clase **RouteURLFilter** sera la encargada de tratar **solo** las peticiones a **/url** para ello en la función **shouldFilter** tendremos este código:
@@ -307,32 +321,86 @@ La clase **RouteURLFilter** sera la encargada de tratar **solo** las peticiones 
 	}
 ```
 
-Este filtro sera declarado del tipo **router** en la función **filterType** por lo cual se ejecutara después de los filtros *pre* y antes de ejecutar la redirección y llamar al servidor final.
+Este filtro será declarado del tipo **pre** en la función **filterType** por lo cual se ejecutara después de los filtros *pre* y antes de ejecutar la redirección y llamar al servidor final.
 
 ```
 	@Override
 	public String filterType() {
-		return FilterConstants.ROUTE_TYPE;
+		return FilterConstants.PRE_TYPE;
 	}
 ```
 
-En la función **run** esta el código que ejecuta realmente la petición a la URL solicitada
+En la función **run** esta el código que ejecuta realmente la petición a la URL solicitad, una vez hayamos capturado la *URL* de destino y  el *path*, como explico más adelante,  es utilizada la función **setRouteHost()**  del **RequestContext** para redirigirla adecuadamente.
+
+```
+	@Override
+	public Object run() {
+		try {
+			RequestContext ctx = RequestContext.getCurrentContext();
+			URIRequest uriRequest;
+			try {
+				uriRequest = getURIRedirection(ctx);
+			} catch (ParseException k) {
+				ctx.setResponseBody(k.getMessage());
+				ctx.setResponseStatusCode(HttpStatus.BAD_REQUEST.value());
+				ctx.setSendZuulResponse(false);
+				return null;
+			}
+
+			UriComponentsBuilder uriComponent = UriComponentsBuilder.fromHttpUrl(uriRequest.getUrl());
+			if (uriRequest.getPath() == null)
+				uriRequest.setPath("/");
+			uriComponent.path(uriRequest.getPath());
+
+			String uri = uriComponent.build().toUriString();
+			ctx.setRouteHost(new URL(uri));
+		} catch (IOException k) {
+			k.printStackTrace();
+		}
+		return null;
+	}
+```
+
+
 
 Si encuentra en el header la variable `hostDestino` será donde mandara la petición recibida. También buscara en la cabecera de la petición  la variables `pathDestino` y `pathSegmentosDestino`. La primera será para añadida al `hostDestino` y la segunda serán los parámetros añadidos.  
 
 Por ejemplo, supongamos una petición como esta:
 
 ``` 
-> curl --header "hostDestino: http://localhost:8080" --header "pathDestino: api"   --header "pathSegmentosDestino: q=profesor-p" localhost:8080/url
+> curl --header "hostDestino: http://localhost:8080" --header "pathDestino: api" \    localhost:8080/url?nombre=profesorp
 ```
 
-La llamada será redirigida a http://localhost:8080/api?q=profesor-p como se puede ver en la siguiente captura de **postman**
+La llamada será redirigida a http://localhost:8080/api?q=profesor-p y mostrara la siguiente salida:
 
+```
+---------- Prueba de ZUUL ------------
+................ RECIBIDA PETICION EN /api ......
+Metodo: GET
+URL: http://localhost:8080/api
+Host Remoto: 127.0.0.1
+----- MAP ----
+Clave:nombre Valor: profesorp
 
+----- Headers ----
+Clave:user-agent Valor: curl/7.60.0
+Clave:accept Valor: */*
+Clave:hostdestino Valor: http://localhost:8080
+Clave:pathdestino Valor: api
+Clave:x-forwarded-host Valor: localhost:8080
+Clave:x-forwarded-proto Valor: http
+Clave:x-forwarded-prefix Valor: /url
+Clave:x-forwarded-port Valor: 8080
+Clave:x-forwarded-for Valor: 0:0:0:0:0:0:0:1
+Clave:accept-encoding Valor: gzip
+Clave:host Valor: localhost:8080
+Clave:connection Valor: Keep-Alive
 
-![postman1](https://raw.githubusercontent.com/chuchip/zuulSpringTest/master/postman1.png)
+----- BODY ----
 
-También puede recibir la URL a redireccionar en un objeto JSON en el cuerpo de la peticion HTML. El objeto JSON debe tener el formato definido por las clases **GatewayRequest** que a su vez contendrá un objeto **URIRequest**
+```
+
+También puede recibir la URL a redireccionar en un objeto JSON en el cuerpo de la petición HTML. El objeto JSON debe tener el formato definido por las clases **GatewayRequest** que a su vez contendrá un objeto **URIRequest**
 
 ```
 public class GatewayRequest {
@@ -348,17 +416,65 @@ public class GatewayRequest {
 public class URIRequest {
 	String url;
 	String path;
-	HashMap<String,String> pathSegmentos=new HashMap<>();
 	byte[] body=null;
 ```
 
+Este es un ejemplo de una redirección poniendo la URL destino en el body:
 
+```
+curl -X POST \
+  'http://localhost:8080/url?nombre=profesorp' \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "body": "El body chuli", "uri": { 	"url":"http://localhost:8080", 	"path": "api"    }
+}'
+```
 
-Aquí se puede ver una captura de pantalla de postman realizando la llamada a través del body:
+URL:  "http://localhost:8080/url?nombre=profesorp"
 
-![postman2](https://raw.githubusercontent.com/chuchip/zuulSpringTest/master/postman2.PNG)
+Cuerpo de la petición:
 
-Realmente en este filtro lo que se hace es crear una nueva petición HTTP, usando la librería  `com.sun.jersey.api.client` , capturar la salida de esa petición y devolverla a **Zuul**. Pero no voy a entrar a explicar en profundidad su funcionamiento. Siempre se puede estudiar el código, ¿ verdad ? ;-)
+```json
+{
+ "body": "El body chuli",
+    "uri": {
+    	"url":"http://localhost:8080",
+    	"path": "api"
+    }
+}
+```
+
+La salida recibida será:
+
+```
+---------- Prueba de ZUUL ------------
+................ RECIBIDA PETICION EN /api ......
+Metodo: POST
+URL: http://localhost:8080/api
+Host Remoto: 127.0.0.1
+----- MAP ----
+Clave:nombre Valor: profesorp
+
+----- Headers ----
+Clave:user-agent Valor: curl/7.60.0
+Clave:accept Valor: */*
+Clave:content-type Valor: application/json
+Clave:x-forwarded-host Valor: localhost:8080
+Clave:x-forwarded-proto Valor: http
+Clave:x-forwarded-prefix Valor: /url
+Clave:x-forwarded-port Valor: 8080
+Clave:x-forwarded-for Valor: 0:0:0:0:0:0:0:1
+Clave:accept-encoding Valor: gzip
+Clave:content-length Valor: 91
+Clave:host Valor: localhost:8080
+Clave:connection Valor: Keep-Alive
+
+----- BODY ----
+El body chuli
+
+```
+
+Como se ve el cuerpo es tratado y al servidor final solo es mandado lo que se envía en el parámetro `body` de la petición **JSON**
 
 Como se ve, **Zuul** tiene mucha potencia y es una excelente herramienta para realizar redirecciones. En este articulo solo he arañado las principales características de esta fantástica herramienta, pero espero que haya servido para ver las posibilidades que ofrece.
 

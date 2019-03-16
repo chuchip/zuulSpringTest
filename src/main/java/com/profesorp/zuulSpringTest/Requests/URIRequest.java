@@ -5,7 +5,7 @@ import java.util.HashMap;
 public class URIRequest {
 	String url;
 	String path;
-	HashMap<String,String> pathSegmentos=new HashMap<>();
+
 	byte[] body=null;
 	public String getUrl() {
 		return url;
@@ -19,12 +19,7 @@ public class URIRequest {
 	public void setPath(String path) {
 		this.path = path;
 	}
-	public HashMap<String, String> getPathSegmentos() {
-		return pathSegmentos;
-	}
-	public void setPathSegmentos(HashMap<String, String> pathSegmentos) {
-		this.pathSegmentos = pathSegmentos;
-	}
+	
 	public byte[] getBody() {
 		return body;
 	}
