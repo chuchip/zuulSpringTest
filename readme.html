@@ -1,0 +1,390 @@
+<!doctype html>
+<html>
+<head>
+<meta charset='UTF-8'><meta name='viewport' content='width=device-width initial-scale=1'>
+<title>readme</title></head>
+<body><p>En este articulo explicare como crear una pasarela para peticiones REST (una <em>gateway</em>)  utilizando Zuul.</p>
+<p><strong><a href='https://cloud.spring.io/spring-cloud-netflix/multi/multi__router_and_filter_zuul.html'>Zuul</a></strong> es parte del  paquete <a href='https://spring.io/projects/spring-cloud-netflix'>Spring Cloud NetFlix</a> y permite redirigir peticiones REST, realizando diversos tipos de filtros. </p>
+<p>En casi cualquier proyecto donde haya microservicios, es deseable que todas las comunicaciones entre esos microservicios pasen por un lugar común, de tal manera que se registren las entradas y salidas, se pueda implementar seguridad o se puedan redirigir las peticiones dependiendo de diversos parámetros. </p>
+<p>Con <strong>Zuul</strong> esto es muy fácil de implementar ya que esta perfectamente integrado con <em>Spring Boot</em>.</p>
+<p>Como siempre <a href='https://github.com/chuchip/zuulSpringTest'>en mi página de GitHub</a> podéis ver los fuentes sobre los que esta basado este articulo.</p>
+<p>&nbsp;</p>
+<h3>Creando el proyecto.</h3>
+<p>Si tenemos instalado <em>Eclipse</em> con el <a href='https://marketplace.eclipse.org/content/spring-tools-4-spring-boot-aka-spring-tool-suite-4'>plugin de <em>Spring Boot</em></a> (lo cual recomiendo), el crear el proyecto seria tan fácil como añadir un  nuevo proyecto del tipo <em>Spring Boot</em> incluyendo el <em>starter</em> <strong>Zuul</strong>. Para poder hacer algunas pruebas también incluiremos el <em>starter</em>  <strong>Web</strong>, como se ve en la imagen:</p>
+<p><img src='https://raw.githubusercontent.com/chuchip/zuulSpringTest/master/springio.png' alt='Eclipse Plugin Spring Boot' referrerPolicy='no-referrer' /></p>
+<p>Como siempre tenemos la opción de crear un proyecto Maven desde la página web <a href='https://start.spring.io/' target='_blank' class='url'>https://start.spring.io/</a> que luego importaremos desde nuestro IDE preferido.</p>
+<p><img src='https://raw.githubusercontent.com/chuchip/zuulSpringTest/master/springio.png' alt='Crear proyecto Maven desde start.spring.io' referrerPolicy='no-referrer' /></p>
+<p>Además de estos starters  en nuestro proyecto deberemos incluir las siguientes dependencias en Maven</p>
+<pre><code>&lt;!-- https://mvnrepository.com/artifact/com.sun.jersey/jersey-client --&gt;
+		&lt;dependency&gt;
+		    &lt;groupId&gt;com.sun.jersey&lt;/groupId&gt;
+		    &lt;artifactId&gt;jersey-client&lt;/artifactId&gt;
+		&lt;/dependency&gt;
+
+		&lt;!-- https://mvnrepository.com/artifact/com.fasterxml.jackson.core/jackson-databind --&gt;
+		&lt;dependency&gt;
+		    &lt;groupId&gt;com.fasterxml.jackson.core&lt;/groupId&gt;
+		    &lt;artifactId&gt;jackson-databind&lt;/artifactId&gt;		  
+		&lt;/dependency&gt;
+</code></pre>
+<p>Estas dependencias son necesarias por este proyecto por las especificaciones que tiene, pero <strong>Zuul</strong> como tal no las necesita en absoluto.</p>
+<h3>Empezando</h3>
+<p>Partiendo que nuestro programa esta escuchando en <a href='http://localhost:8080/' target='_blank' class='url'>http://localhost:8080/</a> , vamos a a suponer que queremos que todo lo que vaya a la URL, <a href='http://localhost:8080/google' target='_blank' class='url'>http://localhost:8080/google</a> sea redirigida a <a href='https://www.google.com' target='_blank' class='url'>https://www.google.com</a>. </p>
+<p>Para ello deberemos crear el fichero <code>application.yml</code> dentro del directorio <em>resources</em>, como se ve en la imagen</p>
+<p><img src='https://raw.githubusercontent.com/chuchip/zuulSpringTest/master/estructura_ficheros.png' alt='Estructura del proyecto' referrerPolicy='no-referrer' /></p>
+<p>En este fichero incluiremos las siguientes líneas:</p>
+<pre><code>zuul:  
+  routes:
+    google:
+      path: /google/**
+      url: https://www.google.com/
+</code></pre>
+<p>Con ellas especificaremos que todo lo que vaya a la ruta <strong>/google/</strong> y algo más (**)  sea redirigido a  <strong><a href='https://www.google.com/' target='_blank' class='url'>https://www.google.com/</a></strong> , teniendo en cuenta que si por ejemplo la petición es realizada <code>http://localhost:8080/google/search?q=profesor_p</code> esta será redirigida a <code>https://www.google.com/search?q=profesor_p</code>. Es decir lo que añadamos después de <strong>/google/</strong> será incluido en la redirección, debido a los dos asteriscos añadidos al final del path.</p>
+<p>Para que el programa  funcione solo será necesario añadir la anotación <code>@EnableZuulProxy</code>en la clase de inicio, en este caso en: <strong>ZuulSpringTestApplication</strong></p>
+<pre><code class='language-java' lang='java'>import org.springframework.cloud.netflix.zuul.EnableZuulProxy;
+@SpringBootApplication
+@EnableZuulProxy
+public class ZuulSpringTestApplication {
+	public static void main(String[] args) {
+		SpringApplication.run(ZuulSpringTestApplication.class, args);
+	}
+}
+</code></pre>
+<h3>Filtrando: Dejando logs</h3>
+<p>En esta parte vamos a ver como crear un filtro de tal manera que se deje un registro de las peticiones realizadas.</p>
+<p>Para ello crearemos la clase <code>PreFilter.java</code> la cual debe extender de <strong>ZuulFilter</strong></p>
+<pre><code>
+public class PreFilter extends ZuulFilter {
+	Logger log = LoggerFactory.getLogger(PreFilter.class); 
+	@Override
+	public Object run() {		
+		 RequestContext ctx = RequestContext.getCurrentContext();	    
+	     StringBuffer strLog=new StringBuffer();
+	     strLog.append(&quot;\n------ NUEVA PETICION ------\n&quot;);	    	    	    
+	     strLog.append(String.format(&quot;Server: %s Metodo: %s Path: %s \n&quot;,ctx.getRequest().getServerName()	    		 
+					,ctx.getRequest().getMethod(),
+					ctx.getRequest().getRequestURI()));
+	     Enumeration&lt;String&gt; enume= ctx.getRequest().getHeaderNames();
+	     String header;
+	     while (enume.hasMoreElements())
+	     {
+	    	 header=enume.nextElement();
+	    	 strLog.append(String.format(&quot;Headers: %s = %s \n&quot;,header,ctx.getRequest().getHeader(header)));	    			
+	     };	  	    
+	     log.info(strLog.toString());
+	     return null;
+	}
+
+	@Override
+	public boolean shouldFilter() {		
+		return true;
+	}
+
+	@Override
+	public int filterOrder() {
+		return FilterConstants.SEND_RESPONSE_FILTER_ORDER;
+	}
+
+	@Override
+	public String filterType() {
+		return &quot;pre&quot;;
+	}
+
+}
+</code></pre>
+<p>En esta clase deberemos sobrescribir las funciones que vemos en el fuente. A continuación explico que haremos en cada de ellas </p>
+<ul>
+<li><p><strong>public Object run()</strong></p>
+<p>Aquí pondremos lo que queremos que se ejecute por cada petición recibida. En ella podremos ver el contenido de la petición y manipularla si fuera necesario.</p>
+</li>
+<li><p><strong>public boolean shouldFilter()</strong> </p>
+<p>Si devuelve <strong>true</strong> se ejecutara la función <strong>run</strong> .</p>
+</li>
+<li><p><strong>public int filterOrder()</strong> </p>
+<p>Devuelve cuando  que se ejecutara este filtro, pues normalmente hay diferentes filtros, para cada tarea. Hay que tener en cuenta que ciertas redirecciones o cambios en la petición hay que hacerlas en ciertos ordenes, por la misma lógica que tiene <strong>zuul</strong>  a la hora de procesar las peticiones.</p>
+</li>
+<li><p><strong>public String filterType()</strong>
+Especifica cuando se ejecutara el filtro. Si devuelve &quot;pre&quot;  se ejecutara antes de que se haya realizado la redirección y por lo tanto antes de que se haya llamado al servidor final (a google en nuestro ejemplo).</p>
+<p>Si devuelve &quot;post&quot; se ejecutara después de que el servidor haya respondido a la petición.</p>
+<p>En la clase <code>org.springframework.cloud.netflix.zuul.filters.support.FilterConstants</code> tenemos definidos los tipos a devolver, PRE_TYPE , POST_TYPE,ERROR_TYPE o ROUTE_TYPE.</p>
+</li>
+
+</ul>
+<p>En la clase de ejemplo vemos como antes de realizar la petición al servidor final, se registran algunos datos de la petición, dejando un log con ellos.</p>
+<p>Por último, para que Spring Boot utilize este filtro debemos añadir la función siguiente en  nuestra clase principal.</p>
+<pre><code>@Bean
+public PreFilter preFilter() {
+        return new PreFilter();
+ }
+</code></pre>
+<p><strong>Zuul</strong> buscara <em>beans</em>  hereden de la clase <strong>ZuulFilter </strong>y los usara. </p>
+<p>En este ejemplo, también esta la clase <strong>PostFilter.java</strong>  que implementa otro filtro pero que se ejecuta después de realizar la petición al servidor  final. Como he comentado esto se consigue devolviendo &quot;post&quot; en la función <strong>filterType()</strong>.</p>
+<p>Para que <strong>Zuul</strong>  use esta clase deberemos crear otro <em>bean</em> con una función como esta:</p>
+<pre><code> @Bean
+ public PostFilter postFilter() {
+        return new PostFilter();
+ }
+</code></pre>
+<p>Recordar que también hay un filtro para tratar los errores y otro para tratar justo después  del redirección (&quot;route&quot;), del que hablare más tarde en este articulo.</p>
+<p>Aclarar que aunque no lo trato en este articulo con <strong>Zuul</strong> no solo podemos redirigir hacia URL estáticas sino también a servicios, suministrados por Eureka Server, del cual hable en un articulo articulo. Además se integra con Hystrix para tener tolerancia a fallos, de tal manera que si no puede alcanzar un servidor se puede especificar que acción tomar.</p>
+<h3>Filtrando. Implementando seguridad</h3>
+<p>Añadamos una nueva redirección al fichero <strong>application.yml</strong></p>
+<pre><code>  privado:
+      path: /privado/**
+      url: http://www.profesor-p.com  
+</code></pre>
+<p>Como se ve, esta redirección llevara cualquier petición tipo <a href='http://localhost:8080/privado/LO_QUE_SEA' target='_blank' class='url'>http://localhost:8080/privado/LO_QUE_SEA</a> a la pagina donde esta  este articulo (<a href='http://www.profesor-p.com' target='_blank' class='url'>http://www.profesor-p.com</a> )</p>
+<p>En la clase <code>PreRewriteFilter</code>he implementando otro filtro tipo <strong>pre</strong> que trata solo esta redirección. ¿ como ?. Fácil, poniendo este código en la función <code>shouldFilter()</code></p>
+<pre><code>@Override
+public boolean shouldFilter() {				
+	return RequestContext.getCurrentContext().getRequest().getRequestURI().startsWith(&quot;/privado&quot;);
+}
+</code></pre>
+<p>Ahora en la función <strong>run</strong> incluimos el siguiente código</p>
+<pre><code class='language-java' lang='java'>Logger log = LoggerFactory.getLogger(PreRewriteFilter.class); 
+	@Override
+	public Object run() {		
+		 RequestContext ctx = RequestContext.getCurrentContext();	    
+	     StringBuffer strLog=new StringBuffer();
+	     strLog.append(&quot;\n------ FILTRANDO ACCESO A PRIVADO - PREREWRITE FILTER  ------\n&quot;);	    
+	     
+	     try {	    	
+    		 String url=UriComponentsBuilder.fromHttpUrl(&quot;http://www.profesor-p.com/&quot;).path(&quot;/wp-admin&quot;).build().toUriString();
+    		 String usuario=ctx.getRequest().getHeader(&quot;usuario&quot;)==null?&quot;&quot;:ctx.getRequest().getHeader(&quot;usuario&quot;);
+    		 String password=ctx.getRequest().getHeader(&quot;clave&quot;)==null?&quot;&quot;:ctx.getRequest().getHeader(&quot;clave&quot;);
+    		 
+    	     if (! usuario.equals(&quot;&quot;))
+    	     {
+    	    	if (!usuario.equals(&quot;profesorp&quot;) || !password.equals(&quot;profe&quot;))
+    	    	{
+	    	    	String msgError=&quot;Usuario y/o contraseña invalidos&quot;;
+	    	    	strLog.append(&quot;\n&quot;+msgError+&quot;\n&quot;);	  
+	    	    	ctx.setResponseBody(msgError);
+	    	    	ctx.setResponseStatusCode(HttpStatus.FORBIDDEN.value());
+	    	    	ctx.setSendZuulResponse(false); 
+	    	    	log.info(strLog.toString());	    	    	
+	    	    	return null;
+    	    	}
+    	    	ctx.setRouteHost(new URL(url));
+    	     }	    	     	    	
+		} catch ( IOException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
+	    
+	     log.info(strLog.toString());
+	     return null;
+	}
+</code></pre>
+<p>Busca en las cabeceras de la petición (<em>headers</em>) si bi existe la cabecera <strong>usuario</strong> no hace nada con lo cual se redireccionara a comprueba que sea <code>http://www.profesor-p.com</code>como se indica en el filtro. En caso de que exista la cabecera <strong>usuario</strong> se comprobara que tenga el valor <code>profesorp</code>y que exista la variable <strong>clave</strong> con el valor <code>profe</code>.  Si esa condición se cumple, la petición se redirigirá a <code>http://www.profesor-p.com/wp-admin</code> en caso contrario devolverá un código FORBIDEN devolviendo la cadena <code>&quot;Usuario y/o contraseña invalidos&quot;</code>  en el cuerpo de la respuesta HTTP. Ademas se cancela el flujo de la petición debido a que se llama a <strong>ctx.setSendZuulResponse(false);</strong></p>
+<h3>Filtrando. Filtrado dinámico</h3>
+<p>Para terminar incluiremos dos nuevas redirecciones en el fichero <code>applicaction.yml</code></p>
+<pre><code> local:
+    path: /local/**
+    url: http://localhost:8080/api
+ url:
+      path: /url/**
+      url: http://url.com
+</code></pre>
+<p>En la primera cuando vayamos a la URL <code>http://localhost:8080/local/LO_QUE_SEA</code> seremos redirigidos a  <code>http://localhost:8080/api/LO_QUE_SEA</code>. Aclarar que la etiqueta <code>local:</code>es arbitraria y podría poner <code>pepe:</code> no teniendo porque coincidir con el path que deseamos redirigir.</p>
+<p>En la segunda cuando vayamos a la URL <code>http://localhost:8080/url/LO_QUE_SEA</code> seremos redirigidos a  <code>http://localhost:8080/api/LO_QUE_SEA</code></p>
+<p>En <a href='http://localhost:8080/api' target='_blank' class='url'>http://localhost:8080/api</a> estará escuchando un servicio REST que esta implementada en la clase <strong>TestController</strong> . Esta clase simplemente deja un registro de los datos de la  petición recibida y devuelve en el <em>body</em> los parámetros recibidos</p>
+<pre><code class='language-java' lang='java'>@RestController
+public class TestController {
+	final  static String SALTOLINEA=&quot;\n&quot;;
+	
+	Logger log = LoggerFactory.getLogger(TestController.class); 
+	@RequestMapping(path=&quot;/api&quot;)
+	public String test(HttpServletRequest request)
+	{
+		StringBuffer strLog=new StringBuffer();
+		
+		strLog.append(&quot;................ RECIBIDA PETICION EN /api ......  &quot;+SALTOLINEA);
+		strLog.append(&quot;Metodo: &quot;+request.getMethod()+SALTOLINEA);
+		strLog.append(&quot;URL: &quot;+request.getRequestURL()+SALTOLINEA);
+		strLog.append(&quot;Host Remoto: &quot;+request.getRemoteHost()+SALTOLINEA);
+		strLog.append(&quot;----- MAP ----&quot;+SALTOLINEA);
+		request.getParameterMap().forEach( (key,value) -&gt;
+		{
+			for (int n=0;n&lt;value.length;n++)
+			{
+				strLog.append(&quot;Clave:&quot;+key+ &quot; Valor: &quot;+value[n]+SALTOLINEA);
+			}
+		} );
+		
+		strLog.append(SALTOLINEA+&quot;----- Headers ----&quot;+SALTOLINEA);
+		Enumeration&lt;String&gt; nameHeaders=request.getHeaderNames();				
+		while (nameHeaders.hasMoreElements())
+		{
+			String name=nameHeaders.nextElement();
+			Enumeration&lt;String&gt; valueHeaders=request.getHeaders(name);
+			while (valueHeaders.hasMoreElements())
+			{
+				String value=valueHeaders.nextElement();
+				strLog.append(&quot;Clave:&quot;+name+ &quot; Valor: &quot;+value+SALTOLINEA);
+			}
+		}
+		try {
+			strLog.append(SALTOLINEA+&quot;----- BODY ----&quot;+SALTOLINEA);
+			BufferedReader reader= request.getReader();
+			if (reader!=null)
+			{
+				char[] linea= new char[100];
+				int nCaracteres;
+				while  ((nCaracteres=reader.read(linea,0,100))&gt;0)
+				{				
+					strLog.append( linea);
+					
+					if (nCaracteres!=100)
+						break;
+				} 
+			}
+		} catch (Throwable e) {
+			e.printStackTrace();
+		}
+		log.info(strLog.toString());
+		
+		return SALTOLINEA+&quot;---------- Prueba de ZUUL ------------&quot;+SALTOLINEA+
+				strLog.toString();
+	}
+}
+
+</code></pre>
+<p>La clase <strong>RouteURLFilter</strong> sera la encargada de tratar <strong>solo</strong> las peticiones a <strong>/url</strong> para ello en la función <strong>shouldFilter</strong> tendremos este código:</p>
+<pre><code>@Override
+	public boolean shouldFilter() {
+		RequestContext ctx = RequestContext.getCurrentContext();
+		if ( ctx.getRequest().getRequestURI() == null || ! ctx.getRequest().getRequestURI().startsWith(&quot;/url&quot;))
+			return false;
+		return ctx.getRouteHost() != null
+				&amp;&amp; ctx.sendZuulResponse();
+	}
+</code></pre>
+<p>Este filtro será declarado del tipo <strong>pre</strong> en la función <strong>filterType</strong> por lo cual se ejecutara después de los filtros <em>pre</em> y antes de ejecutar la redirección y llamar al servidor final.</p>
+<pre><code>	@Override
+	public String filterType() {
+		return FilterConstants.PRE_TYPE;
+	}
+</code></pre>
+<p>En la función <strong>run</strong> esta el código que ejecuta realmente la petición a la URL solicitad, una vez hayamos capturado la <em>URL</em> de destino y  el <em>path</em>, como explico más adelante,  es utilizada la función <strong>setRouteHost()</strong>  del <strong>RequestContext</strong> para redirigirla adecuadamente.</p>
+<pre><code>	@Override
+	public Object run() {
+		try {
+			RequestContext ctx = RequestContext.getCurrentContext();
+			URIRequest uriRequest;
+			try {
+				uriRequest = getURIRedirection(ctx);
+			} catch (ParseException k) {
+				ctx.setResponseBody(k.getMessage());
+				ctx.setResponseStatusCode(HttpStatus.BAD_REQUEST.value());
+				ctx.setSendZuulResponse(false);
+				return null;
+			}
+
+			UriComponentsBuilder uriComponent = UriComponentsBuilder.fromHttpUrl(uriRequest.getUrl());
+			if (uriRequest.getPath() == null)
+				uriRequest.setPath(&quot;/&quot;);
+			uriComponent.path(uriRequest.getPath());
+
+			String uri = uriComponent.build().toUriString();
+			ctx.setRouteHost(new URL(uri));
+		} catch (IOException k) {
+			k.printStackTrace();
+		}
+		return null;
+	}
+</code></pre>
+<p>&nbsp;</p>
+<p>Si encuentra en el header la variable <code>hostDestino</code> será donde mandara la petición recibida. También buscara en la cabecera de la petición  la variables <code>pathDestino</code> y <code>pathSegmentosDestino</code>. La primera será para añadida al <code>hostDestino</code> y la segunda serán los parámetros añadidos.  </p>
+<p>Por ejemplo, supongamos una petición como esta:</p>
+<pre><code>&gt; curl --header &quot;hostDestino: http://localhost:8080&quot; --header &quot;pathDestino: api&quot; \    localhost:8080/url?nombre=profesorp
+</code></pre>
+<p>La llamada será redirigida a <a href='http://localhost:8080/api?q=profesor-p' target='_blank' class='url'>http://localhost:8080/api?q=profesor-p</a> y mostrara la siguiente salida:</p>
+<pre><code>---------- Prueba de ZUUL ------------
+................ RECIBIDA PETICION EN /api ......
+Metodo: GET
+URL: http://localhost:8080/api
+Host Remoto: 127.0.0.1
+----- MAP ----
+Clave:nombre Valor: profesorp
+
+----- Headers ----
+Clave:user-agent Valor: curl/7.60.0
+Clave:accept Valor: */*
+Clave:hostdestino Valor: http://localhost:8080
+Clave:pathdestino Valor: api
+Clave:x-forwarded-host Valor: localhost:8080
+Clave:x-forwarded-proto Valor: http
+Clave:x-forwarded-prefix Valor: /url
+Clave:x-forwarded-port Valor: 8080
+Clave:x-forwarded-for Valor: 0:0:0:0:0:0:0:1
+Clave:accept-encoding Valor: gzip
+Clave:host Valor: localhost:8080
+Clave:connection Valor: Keep-Alive
+
+----- BODY ----
+
+</code></pre>
+<p>También puede recibir la URL a redireccionar en un objeto JSON en el cuerpo de la petición HTML. El objeto JSON debe tener el formato definido por las clases <strong>GatewayRequest</strong> que a su vez contendrá un objeto <strong>URIRequest</strong></p>
+<pre><code>public class GatewayRequest {
+	URIRequest uri;
+	String body;
+
+}
+</code></pre>
+<p>&nbsp;</p>
+<pre><code>public class URIRequest {
+	String url;
+	String path;
+	byte[] body=null;
+</code></pre>
+<p>Este es un ejemplo de una redirección poniendo la URL destino en el body:</p>
+<pre><code>curl -X POST \
+  &#39;http://localhost:8080/url?nombre=profesorp&#39; \
+  -H &#39;Content-Type: application/json&#39; \
+  -d &#39;{
+    &quot;body&quot;: &quot;El body chuli&quot;, &quot;uri&quot;: { 	&quot;url&quot;:&quot;http://localhost:8080&quot;, 	&quot;path&quot;: &quot;api&quot;    }
+}&#39;
+</code></pre>
+<p>URL:  &quot;<a href='http://localhost:8080/url?nombre=profesorp' target='_blank' class='url'>http://localhost:8080/url?nombre=profesorp</a>&quot;</p>
+<p>Cuerpo de la petición:</p>
+<pre><code class='language-json' lang='json'>{
+ &quot;body&quot;: &quot;El body chuli&quot;,
+    &quot;uri&quot;: {
+    	&quot;url&quot;:&quot;http://localhost:8080&quot;,
+    	&quot;path&quot;: &quot;api&quot;
+    }
+}
+</code></pre>
+<p>La salida recibida será:</p>
+<pre><code>---------- Prueba de ZUUL ------------
+................ RECIBIDA PETICION EN /api ......
+Metodo: POST
+URL: http://localhost:8080/api
+Host Remoto: 127.0.0.1
+----- MAP ----
+Clave:nombre Valor: profesorp
+
+----- Headers ----
+Clave:user-agent Valor: curl/7.60.0
+Clave:accept Valor: */*
+Clave:content-type Valor: application/json
+Clave:x-forwarded-host Valor: localhost:8080
+Clave:x-forwarded-proto Valor: http
+Clave:x-forwarded-prefix Valor: /url
+Clave:x-forwarded-port Valor: 8080
+Clave:x-forwarded-for Valor: 0:0:0:0:0:0:0:1
+Clave:accept-encoding Valor: gzip
+Clave:content-length Valor: 91
+Clave:host Valor: localhost:8080
+Clave:connection Valor: Keep-Alive
+
+----- BODY ----
+El body chuli
+
+</code></pre>
+<p>Como se ve el cuerpo es tratado y al servidor final solo es mandado lo que se envía en el parámetro <code>body</code> de la petición <strong>JSON</strong></p>
+<p>Como se ve, <strong>Zuul</strong> tiene mucha potencia y es una excelente herramienta para realizar redirecciones. En este articulo solo he arañado las principales características de esta fantástica herramienta, pero espero que haya servido para ver las posibilidades que ofrece.</p>
+<p>¡¡Nos vemos en la próxima entrada!!</p>
+</body>
+</html>
