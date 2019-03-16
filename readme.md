@@ -14,29 +14,13 @@ Como siempre [en mi página de GitHub](https://github.com/chuchip/zuulSpringTest
 
 Si tenemos instalado *Eclipse* con el [plugin de *Spring Boot*](https://marketplace.eclipse.org/content/spring-tools-4-spring-boot-aka-spring-tool-suite-4) (lo cual recomiendo), el crear el proyecto seria tan fácil como añadir un  nuevo proyecto del tipo *Spring Boot* incluyendo el *starter* **Zuul**. Para poder hacer algunas pruebas también incluiremos el *starter*  **Web**, como se ve en la imagen:
 
-![Eclipse Plugin Spring Boot](https://raw.githubusercontent.com/chuchip/zuulSpringTest/master/springio.png)
+![Eclipse Plugin Spring Boot](https://raw.githubusercontent.com/chuchip/zuulSpringTest/master/starters.png)
 
 Como siempre tenemos la opción de crear un proyecto Maven desde la página web https://start.spring.io/ que luego importaremos desde nuestro IDE preferido.
 
 ![Crear proyecto Maven desde start.spring.io](https://raw.githubusercontent.com/chuchip/zuulSpringTest/master/springio.png)
 
-Además de estos starters  en nuestro proyecto deberemos incluir las siguientes dependencias en Maven
 
-```
-<!-- https://mvnrepository.com/artifact/com.sun.jersey/jersey-client -->
-		<dependency>
-		    <groupId>com.sun.jersey</groupId>
-		    <artifactId>jersey-client</artifactId>
-		</dependency>
-
-		<!-- https://mvnrepository.com/artifact/com.fasterxml.jackson.core/jackson-databind -->
-		<dependency>
-		    <groupId>com.fasterxml.jackson.core</groupId>
-		    <artifactId>jackson-databind</artifactId>		  
-		</dependency>
-```
-
-Estas dependencias son necesarias por este proyecto por las especificaciones que tiene, pero **Zuul** como tal no las necesita en absoluto.
 
 ### Empezando
 
