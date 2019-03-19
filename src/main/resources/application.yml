@@ -1,5 +1,5 @@
 zuul:
-  sensitiveHeaders: 
+  sensitiveHeaders: usuario, clave
   routes:
     google:
       path: /google/**

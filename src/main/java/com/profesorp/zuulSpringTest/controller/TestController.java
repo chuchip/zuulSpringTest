@@ -1,9 +1,7 @@
 package com.profesorp.zuulSpringTest.controller;
 
 import java.io.BufferedReader;
-import java.io.IOException;
 import java.util.Enumeration;
-import java.util.stream.Collectors;
 
 import javax.servlet.http.HttpServletRequest;
 

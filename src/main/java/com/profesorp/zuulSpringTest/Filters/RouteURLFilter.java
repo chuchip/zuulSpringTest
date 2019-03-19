@@ -75,7 +75,8 @@ public class RouteURLFilter extends ZuulFilter {
 	     uriComponent.path(uriRequest.getPath());
 	     	     
 	     String uri=uriComponent.build().toUriString();
-	     ctx.setRouteHost(new URL(uri));	   	  
+	     ctx.setRouteHost(new URL(uri));	  
+	     //ctx.put("serviceId", "serviceA"); 
     	} catch (IOException k)
     	{
     		k.printStackTrace();

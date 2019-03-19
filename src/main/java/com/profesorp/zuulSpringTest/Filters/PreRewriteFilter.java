@@ -2,6 +2,9 @@ package com.profesorp.zuulSpringTest.Filters;
 
 import java.io.IOException;
 import java.net.URL;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -22,7 +25,7 @@ public class PreRewriteFilter extends ZuulFilter {
 	     strLog.append("\n------ FILTRANDO ACCESO A PRIVADO - PREREWRITE FILTER  ------\n");	    
 	     
 	     try {	    	
-    		 String url=UriComponentsBuilder.fromHttpUrl("http://www.profesor-p.com/").path("/wp-admin").build().toUriString();
+    		 String url=UriComponentsBuilder.fromHttpUrl("http://localhost:8080/").path("/api").build().toUriString();
     		 String usuario=ctx.getRequest().getHeader("usuario")==null?"":ctx.getRequest().getHeader("usuario");
     		 String password=ctx.getRequest().getHeader("clave")==null?"":ctx.getRequest().getHeader("clave");
     		 
@@ -38,6 +41,12 @@ public class PreRewriteFilter extends ZuulFilter {
 	    	    	log.info(strLog.toString());	    	    	
 	    	    	return null;
     	    	}
+    	    	// Borrando usuario y contraseña que no quiero que se pasen
+    	    	// No utilizado pero dejado como ejemplo de las posibilidades.
+//    	    	removeRequestHeader(ctx,Arrays.asList("usuario","clave"));
+    	    	
+//    	    	ctx.addZuulRequestHeader("usuario",null);
+//    	    	ctx.getZuulRequestHeaders().remove("clave");
     	    	ctx.setRouteHost(new URL(url));
     	     }	    	     	    	
 		} catch ( IOException e) {
@@ -48,7 +57,26 @@ public class PreRewriteFilter extends ZuulFilter {
 	     log.info(strLog.toString());
 	     return null;
 	}
-		
+	/**
+	 * Quito de las HEADERS los parametros pasados en la lista.
+	 * @param ctx
+	 * @param listRemove
+	 */
+	void removeRequestHeader(RequestContext ctx, List<String> listRemove)
+	{
+		Map<String,String> headers=ctx.getZuulRequestHeaders();
+		if (headers==null)
+			return;
+		List<String> headerPut= new ArrayList<>();
+		headers.forEach( (key,value) -> {
+			if (!listRemove.contains(key))
+			{
+				headerPut.add(key);
+			}
+		});
+		// Esto solo funcionara si el orden del filtro es inferior a PRE_DECORATION_FILTER_ORDER
+		ctx.put("zuulResponseHeaders", headerPut);
+	}
 	@Override
 	public boolean shouldFilter() {				
 		return RequestContext.getCurrentContext().getRequest().getRequestURI().startsWith("/privado");
@@ -56,6 +84,7 @@ public class PreRewriteFilter extends ZuulFilter {
 
 	@Override
 	public int filterOrder() {
+		
 		return FilterConstants.PRE_DECORATION_FILTER_ORDER+1; 
 	}
 
